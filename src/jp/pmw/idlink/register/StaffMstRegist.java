@@ -5,27 +5,27 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
-import com.jenkov.db.PersistenceManager;
-import com.jenkov.db.itf.IDaos;
 import com.jenkov.db.itf.PersistenceException;
 
 import jp.pmw.id_generator.IdGenerator;
 import jp.pmw.idlink.mst.ROOMS_MST;
+import jp.pmw.idlink.mst.STAFFS_MST;
 import jp.pmw.idlink.tmp.TMP_ROOM_MST;
+import jp.pmw.idlink.tmp.TMP_STAFF_MST;
 import jp.pmw.log.MyLog;
+import jp.pmw.my.time.MyTime;
 import jp.pmw.mysql.Connect;
 import jp.pmw.sitandgo.config.MyConfig;
 import jp.pmw.util.error.UtilError;
 
+public class StaffMstRegist extends MstRegist{
+	private String tmpMstTableName = MyConfig.DB_TABLE_TMP_STAFF_MST;
 
-public class RoomMstRegist extends MstRegist{
-	private String tmpMstTableName = MyConfig.DB_TABLE_TMP_ROOM_MST;
-
-	public RoomMstRegist(){
+	public StaffMstRegist(){
 		super();
 		try {
 			startProcess();
-			MyLog.getInstance().info("移行データ数:"+this.successCount+",移行できず数:"+this.faileCount);
+			MyLog.getInstance().info(tmpMstTableName + "から,移行データ数:"+this.successCount+",移行できず数:"+this.faileCount);
 		} catch (PersistenceException e) {
 			// TODO 自動生成された catch ブロック
 			MyLog.getInstance().error(e.getMessage());
@@ -36,14 +36,14 @@ public class RoomMstRegist extends MstRegist{
 		}
 	}
 	private void startProcess() throws PersistenceException, SQLException{
-		TmpData tmp = new TmpData<TMP_ROOM_MST>();
-		List<TMP_ROOM_MST> tmpList = tmp.getTmpMst(TMP_ROOM_MST.class, tmpMstTableName);
+		TmpData tmp = new TmpData<TMP_STAFF_MST>();
+		List<TMP_STAFF_MST> tmpList = tmp.getTmpMst(TMP_STAFF_MST.class, tmpMstTableName);
 
 		for(int i = 0; i<tmpList.size(); i++){
-			if(tmpList.get(i).getUNIVERSITY_NAME() == null){
-				MyLog.getInstance().error("大学名が登録されていません.");
+			if(tmpList.get(i).getUniversity_Name() == null){
+				MyLog.getInstance().error("大学名がありません.");
 			}else{
-				String universityName = tmpList.get(i).getUNIVERSITY_NAME();
+				String universityName = tmpList.get(i).getUniversity_Name();
 				String universityNumber = getUniversityNumber(universityName);
 				if(universityNumber == null){
 					MyLog.getInstance().error("大学名「"+universityName+"」は、DBから大学番号を取得できません.");
@@ -51,12 +51,30 @@ public class RoomMstRegist extends MstRegist{
 					//String id = checkerAlradyItem(universityNumber,tmpList.get(i));
 					String id = null;
 					if(id != null){
-						MyLog.getInstance().info(tmpList.get(i).toString());
+						MyLog.getInstance().info("登録済み:"+tmpList.get(i).toString());
 					}else{
+						//
+						String belongId = getBelongId(universityNumber,tmpList.get(i).getDIVISION_NAME(),tmpList.get(i).getDEPARTMENT_NAME());
+						if(belongId == null){
+							String divname = "";
+							String deptname = "";
+							if(tmpList.get(i).getDIVISION_NAME() == null){
+								divname = "(null)";
+							}else{
+								divname = tmpList.get(i).getDIVISION_NAME();
+							}
+							if(tmpList.get(i).getDEPARTMENT_NAME() == null){
+								deptname = "(null)";
+							}else{
+								deptname = tmpList.get(i).getDEPARTMENT_NAME();
+							}
+							MyLog.getInstance().error("所属を確認できません.大学番号:"+universityNumber+",所属部署名:"+divname+",所属課名:"+deptname);
+							//return ;
+						}
+
 						int registerCount = getYearRegistrationRoomIdCount(universityNumber);
-						IdGenerator.setMextUniversity(universityNumber);
-						String roomId = IdGenerator.generateRoomId(registerCount);
-						ROOMS_MST roomMst = new ROOMS_MST(universityNumber,roomId,tmpList.get(i));
+						String staffId = IdGenerator.generateStaffId(belongId,MyTime.getInstance().getTwoDigitYear(),registerCount);
+						STAFFS_MST roomMst = new STAFFS_MST(staffId,belongId,tmpList.get(i));
 						int insertCount = insertMstDate(roomMst);
 						if(insertCount == 1){
 							//成功
@@ -71,6 +89,28 @@ public class RoomMstRegist extends MstRegist{
 				}
 			}
 		}
+	}
+
+	private String getBelongId(String universityNumber,String divisionName,String departmentName) throws SQLException{
+		String belongId = null;
+		String sql = "SELECT BELONG_ID FROM `BELONGS_MST` WHERE `UNIVERSITY_NUMBER` LIKE '"+universityNumber+"' AND `DIVISION_NAME` LIKE '"+divisionName+"' AND `DEPARTMENT_NAME` LIKE '"+departmentName+"'";
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		try{
+			ps = Connect.getInstance().getConnection().prepareStatement(sql);
+			rs = ps.executeQuery();
+			if(rs.next()){
+				belongId = rs.getString("BELONG_ID");
+			}
+		} finally {
+			if(ps != null){
+				ps.close();
+			}
+			if(rs != null){
+				rs.close();
+			}
+		}
+		return belongId;
 	}
 
 	private String getUniversityNumber(String universityName) throws SQLException{
@@ -137,14 +177,14 @@ public class RoomMstRegist extends MstRegist{
 	//ROOM_MST用のID数取得
 	private int getYearRegistrationRoomIdCount(String universityNumber) throws SQLException{
 		int yearRegistrationCount = 0;
-		String sql = "SELECT COUNT(ROOM_ID) FROM `ROOMS_MST` WHERE `UNIVERSITY_NUMBER` LIKE '"+universityNumber+"'";
+		String sql = "SELECT COUNT(STAFF_ID) FROM `STAFFS_MST` WHERE `RECORED_INSERT_DATE_TIME` LIKE '%"+MyTime.getInstance().getTwoDigitYear()+"%'";
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try{
 			ps = Connect.getInstance().getConnection().prepareStatement(sql);
 			rs = ps.executeQuery();
 			if(rs.next()){
-				yearRegistrationCount = rs.getInt("COUNT(ROOM_ID)");
+				yearRegistrationCount = rs.getInt("COUNT(STAFF_ID)");
 			}
 		} finally {
 			if(ps != null){
@@ -158,18 +198,15 @@ public class RoomMstRegist extends MstRegist{
 
 	}
 
-	private int insertMstDate(ROOMS_MST r) throws PersistenceException{
+	private int insertMstDate(STAFFS_MST r) throws PersistenceException{
 		//教室情報セット
 		return daos.getObjectDao().insert(r);
 	}
 
-	private void updateTempCompFlag(TMP_ROOM_MST tmp) throws PersistenceException{
+	private void updateTempCompFlag(TMP_STAFF_MST tmp) throws PersistenceException{
 		tmp.setCOMPLETE_FLAG(1);
 		//更新
 		daos.getObjectDao().update(tmp);
 	}
-
-
-
 
 }
