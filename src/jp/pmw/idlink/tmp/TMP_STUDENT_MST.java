@@ -9,6 +9,7 @@ public class TMP_STUDENT_MST extends BaseTmp{
 	public String familyName;
 	public String givenName;
 	public String universityName;
+	public String enrollmentPeriod;
 	public String alias;
 	public String grade;
 	public String schoolName;
@@ -42,6 +43,10 @@ public class TMP_STUDENT_MST extends BaseTmp{
 	public void setUniversity_Name(String universityName){
 		this.universityName = universityName;
 	}
+	public void setENROLLMENT_PERIOD(String enrollmentPeriod){
+		this.enrollmentPeriod = enrollmentPeriod;
+	}
+
 	public void setAlias(String alias){
 		this.alias = alias;
 	}

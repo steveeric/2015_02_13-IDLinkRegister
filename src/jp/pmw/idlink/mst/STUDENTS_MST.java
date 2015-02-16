@@ -23,6 +23,9 @@ public class STUDENTS_MST {
 	public String getStudent_Id_Number(){
 		return this.mst.studentIdNumber;
 	}
+	public String getENROLLMENT_PERIOD(){
+		return this.mst.enrollmentPeriod;
+	}
 	public String getGrade(){
 		return this.mst.grade;
 	}
